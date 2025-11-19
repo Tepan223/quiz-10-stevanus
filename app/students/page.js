@@ -1,5 +1,7 @@
-'use client';
-import { useEffect, useState } from "react";
+// pages/students/quiz.js
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import {
   Table,
   Button,
@@ -13,6 +15,9 @@ import {
   Typography,
   Popconfirm,
   Tag,
+  Row,
+  Col,
+  Spin,
 } from "antd";
 import {
   PlusOutlined,
@@ -27,28 +32,42 @@ const { Title, Text } = Typography;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([]);
-  const [filteredStudents, setFilteredStudents] = useState([]);
+  const [rawStudents, setRawStudents] = useState([]); // unfiltered master
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentStudent, setCurrentStudent] = useState(null);
   const [form] = Form.useForm();
-  const [searchText, setSearchText] = useState("");
+
+  // search & filter
+  const [searchTerm, setSearchTerm] = useState("");
+  const [classFilter, setClassFilter] = useState(null);
+
+  // pagination
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 8,
+  });
 
   const API_URL = "/api/students";
 
-  const fetchStudents = async () => {
+  // Fetch students
+  const fetchStudents = async (showLoading = true) => {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
+
       const res = await axios.get(API_URL);
-      const data = res.data?.body?.data || [];
-      setStudents(data);
-      setFilteredStudents(data);
+      const data = res.data?.data ?? res.data ?? [];
+      const arr = Array.isArray(data) ? data : data?.body?.data ?? [];
+      const filteredArr = arr.filter((s) => s.status!== "deleted");
+
+      setRawStudents(filteredArr);
+      setStudents(filteredArr);
     } catch (error) {
       console.error(error);
       message.error("Failed to fetch students");
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
@@ -56,23 +75,41 @@ export default function StudentsPage() {
     fetchStudents();
   }, []);
 
-  // Search/filter handler
-  const handleSearch = (e) => {
-    const value = e.target.value.toLowerCase();
-    setSearchText(value);
-    const filtered = students.filter(
-      (s) =>
-        s.name.toLowerCase().includes(value) ||
-        s.major.toLowerCase().includes(value)
-    );
-    setFilteredStudents(filtered);
-  };
+  // Search & Filter
+  useEffect(() => {
+    const term = String(searchTerm).trim().toLowerCase();
+    let filtered = rawStudents;
 
+    if (term) {
+      filtered = filtered.filter((s) =>
+        String(s.name).toLowerCase().includes(term) ||
+        String(s.major).toLowerCase().includes(term)
+      );
+    }
+
+    if (classFilter) {
+      filtered = filtered.filter((s) => s.class_name === classFilter);
+    }
+
+    setPagination((p) => ({ ...p, current: 1 }));
+    setStudents(filtered);
+  }, [searchTerm, classFilter, rawStudents]);
+
+  // Add or Update student
   const handleSubmit = async (values) => {
     try {
+      setLoading(true);
+
       if (isEditing && currentStudent) {
         await axios.put(`${API_URL}?id=${currentStudent.id}`, values);
         message.success("Student updated successfully!");
+
+        // Optimistic update
+        setRawStudents((prev) =>
+          prev.map((s) =>
+            s.id === currentStudent.id ? { ...s, ...values } : s
+          )
+        );
       } else {
         await axios.post(API_URL, values);
         message.success("Student added successfully!");
@@ -82,104 +119,113 @@ export default function StudentsPage() {
       form.resetFields();
       setIsEditing(false);
       setCurrentStudent(null);
-      fetchStudents();
+
+      await fetchStudents(false);
     } catch (error) {
       console.error(error);
       message.error("Failed to save student");
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Delete student (FIXED)
   const handleDelete = async (id) => {
     try {
+      setLoading(true);
+
       await axios.delete(`${API_URL}?id=${id}`);
+
       message.success("Student deleted successfully!");
-      fetchStudents();
+
+      // Optimistic update
+      setRawStudents((prev) => prev.filter((s) => s.id !== id));
+      setStudents((prev) => prev.filter((s) => s.id !== id));
     } catch (error) {
       console.error(error);
       message.error("Failed to delete student");
+    } finally {
+      setLoading(false);
     }
   };
 
+  // Open edit modal
   const openEditModal = (student) => {
     setIsEditing(true);
     setCurrentStudent(student);
-    form.setFieldsValue(student);
+
+    form.setFieldsValue({
+      name: student.name,
+      nis: student.nis,
+      class_name: student.class_name,
+      major: student.major,
+    });
+
     setIsModalOpen(true);
   };
 
-  const columns = [
-    {
-      title: "No",
-      key: "index",
-      render: (_, __, index) => <Text strong>{index + 1}</Text>,
-      align: "center",
-      width: 70,
-    },
-    {
-      title: "Name",
-      dataIndex: "name",
-      key: "name",
-      render: (text) => <Text strong>{text}</Text>,
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      width: 200,
-    },
-    {
-      title: "NIS",
-      dataIndex: "nis",
-      key: "nis",
-      align: "center",
-      width: 120,
-    },
-    {
-      title: "Class",
-      dataIndex: "class_name",
-      key: "class_name",
-      align: "center",
-      width: 120,
-      render: (cls) => <Tag color="blue">{cls}</Tag>,
-      sorter: (a, b) => a.class_name.localeCompare(b.class_name),
-    },
-    {
-      title: "Major",
-      dataIndex: "major",
-      key: "major",
-      render: (major) => <Text type="secondary">{major}</Text>,
-      ellipsis: true,
-    },
-    {
-      title: "Actions",
-      key: "actions",
-      align: "center",
-      width: 160,
-      render: (_, record) => (
-        <Space>
-          <Button
-            size="small"
-            type="default"
-            icon={<EditOutlined />}
-            onClick={() => openEditModal(record)}
-          >
-            Edit
-          </Button>
-          <Popconfirm
-            title="Are you sure to delete this student?"
-            okText="Yes"
-            cancelText="No"
-            onConfirm={() => handleDelete(record.id)}
-          >
-            <Button
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-              style={{ borderColor: "#ff4d4f" }}
-            >
-              Delete
+  // Table columns
+  const columns = useMemo(
+    () => [
+      {
+        title: "No",
+        key: "index",
+        align: "center",
+        width: 70,
+        render: (_, __, index) =>
+          (pagination.current - 1) * pagination.pageSize + index + 1,
+      },
+      {
+        title: "Name",
+        dataIndex: "name",
+        key: "name",
+        width: 240,
+        sorter: (a, b) => a.name.localeCompare(b.name),
+      },
+      {
+        title: "NIS",
+        dataIndex: "nis",
+        key: "nis",
+        align: "center",
+        width: 120,
+      },
+      {
+        title: "Class",
+        dataIndex: "class_name",
+        key: "class_name",
+        align: "center",
+        width: 140,
+        render: (cls) => <Tag color="blue">{cls}</Tag>,
+      },
+      {
+        title: "Major",
+        dataIndex: "major",
+        key: "major",
+      },
+      {
+        title: "Actions",
+        key: "actions",
+        align: "center",
+        width: 160,
+        render: (_, record) => (
+          <Space>
+            <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
+              Edit
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Popconfirm
+              title="Delete student?"
+              okText="Yes"
+              cancelText="No"
+              onConfirm={() => handleDelete(record.id)}
+            >
+              <Button size="small" danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    [pagination]
+  );
 
   const classOptions = [
     "X RPL 1",
@@ -193,7 +239,7 @@ export default function StudentsPage() {
   return (
     <div
       style={{
-        padding: 32,
+        padding: 24,
         background: "#f0f2f5",
         minHeight: "100vh",
         display: "flex",
@@ -201,21 +247,10 @@ export default function StudentsPage() {
       }}
     >
       <Card
-        title={<Title level={3} style={{ margin: 0 }}>📋 Student Management</Title>}
+        title={<Title level={3}>Student Management</Title>}
         extra={
           <Space>
-            <Input
-              placeholder="Search by name or major"
-              prefix={<SearchOutlined />}
-              value={searchText}
-              onChange={handleSearch}
-              allowClear
-            />
-            <Button
-              icon={<ReloadOutlined />}
-              onClick={fetchStudents}
-              loading={loading}
-            >
+            <Button icon={<ReloadOutlined />} onClick={() => fetchStudents()} loading={loading}>
               Refresh
             </Button>
             <Button
@@ -234,104 +269,98 @@ export default function StudentsPage() {
         }
         style={{
           borderRadius: 16,
-          boxShadow: "0 6px 16px rgba(0,0,0,0.08)",
           width: "100%",
-          maxWidth: 1000,
+          maxWidth: 1100,
           background: "#fff",
         }}
       >
-        <Table
-          columns={columns}
-          dataSource={filteredStudents}
-          rowKey="id"
-          loading={loading}
-          bordered={false}
-          pagination={{
-            pageSize: 8,
-            showSizeChanger: false,
-          }}
-          style={{
-            background: "#fff",
-            borderRadius: 12,
-          }}
-          rowClassName={() => "custom-row"}
-        />
+        {/* Filters Section */}
+        <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
+          <Col xs={24} sm={12} md={10}>
+            <Input
+              placeholder="Search by name or major..."
+              prefix={<SearchOutlined />}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              allowClear
+            />
+          </Col>
+          <Col xs={12} sm={6} md={6}>
+            <Select
+              placeholder="Filter by class"
+              allowClear
+              style={{ width: "100%" }}
+              value={classFilter}
+              onChange={(v) => setClassFilter(v)}
+              options={classOptions.map((c) => ({ label: c, value: c }))}
+            />
+          </Col>
+          <Col xs={12} sm={6} md={4}>
+            <Button
+              onClick={() => {
+                setSearchTerm("");
+                setClassFilter(null);
+                fetchStudents();
+              }}
+            >
+              Reset
+            </Button>
+          </Col>
+          <Col xs={24} sm={24} md={4} style={{ textAlign: "right" }}>
+            <Text>Total: <b>{students.length}</b></Text>
+          </Col>
+        </Row>
+
+        {/* Table */}
+        <Spin spinning={loading}>
+          <Table
+            columns={columns}
+            dataSource={students}
+            rowKey="id"
+            pagination={{
+              current: pagination.current,
+              pageSize: pagination.pageSize,
+              total: students.length,
+              showSizeChanger: false,
+              onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
+            }}
+          />
+        </Spin>
       </Card>
 
-      {/* Modal Form */}
+      {/* Modal */}
       <Modal
-        title={isEditing ? "✏️ Edit Student" : "➕ Add New Student"}
+        title={isEditing ? "Edit Student" : "Add Student"}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
+          form.resetFields();
           setIsEditing(false);
-          setCurrentStudent(null);
         }}
-        destroyOnClose
         footer={null}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          style={{ marginTop: 10 }}
-        >
-          <Form.Item
-            name="name"
-            label="Full Name"
-            rules={[{ required: true, message: "Please input name" }]}
-          >
-            <Input placeholder="Enter student name" />
+        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Form.Item name="name" label="Full Name" rules={[{ required: true }]}>
+            <Input />
           </Form.Item>
 
-          <Form.Item
-            name="nis"
-            label="NIS"
-            rules={[{ required: true, message: "Please input NIS" }]}
-          >
-            <Input placeholder="Enter student NIS" />
+          <Form.Item name="nis" label="NIS" rules={[{ required: true }]}>
+            <Input />
           </Form.Item>
 
-          <Form.Item
-            name="class_name"
-            label="Class"
-            rules={[{ required: true, message: "Please select class" }]}
-          >
-            <Select
-              placeholder="Select class"
-              options={classOptions.map((cls) => ({ label: cls, value: cls }))}
-            />
+          <Form.Item name="class_name" label="Class" rules={[{ required: true }]}>
+            <Select options={classOptions.map((c) => ({ label: c, value: c }))} />
           </Form.Item>
 
-          <Form.Item
-            name="major"
-            label="Major"
-            rules={[{ required: true, message: "Please input major" }]}
-          >
-            <Input placeholder="Enter major (e.g. Rekayasa Perangkat Lunak)" />
+          <Form.Item name="major" label="Major" rules={[{ required: true }]}>
+            <Input />
           </Form.Item>
 
-          <Form.Item>
-            <Button type="primary" htmlType="submit" block size="large">
-              {isEditing ? "Update Student" : "Add Student"}
-            </Button>
-          </Form.Item>
+          <Button type="primary" htmlType="submit" block loading={loading}>
+            {isEditing ? "Update" : "Add"}
+          </Button>
         </Form>
       </Modal>
-
-      <style jsx global>{`
-        .ant-table-thead > tr > th {
-          background: #fafafa !important;
-          font-weight: 600;
-          text-align: center;
-        }
-        .ant-table-tbody > tr:hover > td {
-          background: #f9f9ff !important;
-        }
-        .custom-row td {
-          padding: 12px 16px !important;
-        }
-      `}</style>
     </div>
   );
 }
