@@ -1,4 +1,3 @@
-// pages/students/quiz.js
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -32,18 +31,16 @@ const { Title, Text } = Typography;
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([]);
-  const [rawStudents, setRawStudents] = useState([]); // unfiltered master
+  const [rawStudents, setRawStudents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentStudent, setCurrentStudent] = useState(null);
   const [form] = Form.useForm();
 
-  // search & filter
   const [searchTerm, setSearchTerm] = useState("");
   const [classFilter, setClassFilter] = useState(null);
 
-  // pagination
   const [pagination, setPagination] = useState({
     current: 1,
     pageSize: 8,
@@ -51,7 +48,6 @@ export default function StudentsPage() {
 
   const API_URL = "/api/students";
 
-  // Fetch students
   const fetchStudents = async (showLoading = true) => {
     try {
       if (showLoading) setLoading(true);
@@ -59,7 +55,7 @@ export default function StudentsPage() {
       const res = await axios.get(API_URL);
       const data = res.data?.data ?? res.data ?? [];
       const arr = Array.isArray(data) ? data : data?.body?.data ?? [];
-      const filteredArr = arr.filter((s) => s.status!== "deleted");
+      const filteredArr = arr.filter((s) => s.status !== "deleted");
 
       setRawStudents(filteredArr);
       setStudents(filteredArr);
@@ -75,15 +71,15 @@ export default function StudentsPage() {
     fetchStudents();
   }, []);
 
-  // Search & Filter
   useEffect(() => {
     const term = String(searchTerm).trim().toLowerCase();
     let filtered = rawStudents;
 
     if (term) {
-      filtered = filtered.filter((s) =>
-        String(s.name).toLowerCase().includes(term) ||
-        String(s.major).toLowerCase().includes(term)
+      filtered = filtered.filter(
+        (s) =>
+          String(s.name).toLowerCase().includes(term) ||
+          String(s.major).toLowerCase().includes(term)
       );
     }
 
@@ -95,7 +91,6 @@ export default function StudentsPage() {
     setStudents(filtered);
   }, [searchTerm, classFilter, rawStudents]);
 
-  // Add or Update student
   const handleSubmit = async (values) => {
     try {
       setLoading(true);
@@ -104,7 +99,6 @@ export default function StudentsPage() {
         await axios.put(`${API_URL}?id=${currentStudent.id}`, values);
         message.success("Student updated successfully!");
 
-        // Optimistic update
         setRawStudents((prev) =>
           prev.map((s) =>
             s.id === currentStudent.id ? { ...s, ...values } : s
@@ -129,7 +123,6 @@ export default function StudentsPage() {
     }
   };
 
-  // Delete student (FIXED)
   const handleDelete = async (id) => {
     try {
       setLoading(true);
@@ -138,7 +131,6 @@ export default function StudentsPage() {
 
       message.success("Student deleted successfully!");
 
-      // Optimistic update
       setRawStudents((prev) => prev.filter((s) => s.id !== id));
       setStudents((prev) => prev.filter((s) => s.id !== id));
     } catch (error) {
@@ -149,7 +141,6 @@ export default function StudentsPage() {
     }
   };
 
-  // Open edit modal
   const openEditModal = (student) => {
     setIsEditing(true);
     setCurrentStudent(student);
@@ -164,7 +155,6 @@ export default function StudentsPage() {
     setIsModalOpen(true);
   };
 
-  // Table columns
   const columns = useMemo(
     () => [
       {
@@ -209,7 +199,11 @@ export default function StudentsPage() {
         width: 160,
         render: (_, record) => (
           <Space>
-            <Button size="small" icon={<EditOutlined />} onClick={() => openEditModal(record)}>
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => openEditModal(record)}
+            >
               Edit
             </Button>
             <Popconfirm
@@ -250,7 +244,11 @@ export default function StudentsPage() {
         title={<Title level={3}>Student Management</Title>}
         extra={
           <Space>
-            <Button icon={<ReloadOutlined />} onClick={() => fetchStudents()} loading={loading}>
+            <Button
+              icon={<ReloadOutlined />}
+              onClick={() => fetchStudents()}
+              loading={loading}
+            >
               Refresh
             </Button>
             <Button
@@ -274,7 +272,6 @@ export default function StudentsPage() {
           background: "#fff",
         }}
       >
-        {/* Filters Section */}
         <Row gutter={[12, 12]} style={{ marginBottom: 12 }}>
           <Col xs={24} sm={12} md={10}>
             <Input
@@ -307,11 +304,12 @@ export default function StudentsPage() {
             </Button>
           </Col>
           <Col xs={24} sm={24} md={4} style={{ textAlign: "right" }}>
-            <Text>Total: <b>{students.length}</b></Text>
+            <Text>
+              Total: <b>{students.length}</b>
+            </Text>
           </Col>
         </Row>
 
-        {/* Table */}
         <Spin spinning={loading}>
           <Table
             columns={columns}
@@ -322,13 +320,13 @@ export default function StudentsPage() {
               pageSize: pagination.pageSize,
               total: students.length,
               showSizeChanger: false,
-              onChange: (page, pageSize) => setPagination({ current: page, pageSize }),
+              onChange: (page, pageSize) =>
+                setPagination({ current: page, pageSize }),
             }}
           />
         </Spin>
       </Card>
 
-      {/* Modal */}
       <Modal
         title={isEditing ? "Edit Student" : "Add Student"}
         open={isModalOpen}
@@ -348,7 +346,11 @@ export default function StudentsPage() {
             <Input />
           </Form.Item>
 
-          <Form.Item name="class_name" label="Class" rules={[{ required: true }]}>
+          <Form.Item
+            name="class_name"
+            label="Class"
+            rules={[{ required: true }]}
+          >
             <Select options={classOptions.map((c) => ({ label: c, value: c }))} />
           </Form.Item>
 

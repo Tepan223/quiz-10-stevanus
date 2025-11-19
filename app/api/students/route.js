@@ -1,12 +1,8 @@
 import axios from "axios";
 import { NextResponse } from "next/server";
 
-
 const API_URL = "https://course.summitglobal.id/students";
 
-/**
- * GET ALL STUDENTS
- */
 export async function GET() {
   try {
     const response = await axios.get(API_URL);
@@ -15,7 +11,6 @@ export async function GET() {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-
   } catch (error) {
     console.error("GET proxy error:", error?.response?.data || error.message);
     return new Response(
@@ -28,9 +23,6 @@ export async function GET() {
   }
 }
 
-/**
- * ADD STUDENT
- */
 export async function POST(request) {
   try {
     const body = await request.json();
@@ -42,7 +34,6 @@ export async function POST(request) {
     return new Response(JSON.stringify(response.data), {
       status: response.status,
     });
-
   } catch (error) {
     console.error("POST proxy error:", error?.response?.data || error.message);
     return new Response(
@@ -55,9 +46,6 @@ export async function POST(request) {
   }
 }
 
-/**
- * UPDATE STUDENT
- */
 export async function PUT(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -79,7 +67,6 @@ export async function PUT(request) {
     return new Response(JSON.stringify(response.data), {
       status: response.status,
     });
-
   } catch (error) {
     console.error("PUT error:", error?.response?.data || error.message);
     return new Response(
@@ -92,9 +79,6 @@ export async function PUT(request) {
   }
 }
 
-/**
- * DELETE STUDENT
- */
 export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -109,15 +93,12 @@ export async function DELETE(request) {
 
     const endpoint = `${API_URL}/${id}`;
 
-    // Tetap coba delete API eksternal
     try {
       await axios.delete(endpoint);
     } catch (error) {
       console.error("REAL DELETE FAILED (but spoofing 200):", error.message);
-      // Tapi tetap return 200 → spoofing
     }
 
-    // Spoofing success
     return NextResponse.json(
       {
         success: true,
@@ -126,11 +107,9 @@ export async function DELETE(request) {
       },
       { status: 200 }
     );
-
   } catch (error) {
     console.error("DELETE general error:", error.message);
 
-    // Tetap 200 karena spoofing
     return NextResponse.json(
       {
         success: true,
